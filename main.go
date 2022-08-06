@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/net/html"
 )
 
@@ -17,7 +18,8 @@ var visitedPages map[string]struct{} = map[string]struct{}{}
 
 func main() {
 	// @todo set custom input url
-	url := fmt.Sprintf("%s/wiki/Wikipedia:Getting_to_Philosophy", BASE_URL)
+	// url := fmt.Sprintf("%s/wiki/Wikipedia:Getting_to_Philosophy", BASE_URL)
+	url := fmt.Sprintf("%s/wiki/Reality", BASE_URL)
 
 	wikiPage, err := http.Get(url)
 	if err != nil {
@@ -29,41 +31,44 @@ func main() {
 		panic(errors.Wrapf(err, "failed to parse wiki page: %s", url))
 	}
 
-	findAndFollowLink(pageNodes)
+	err = findAndFollowLink(pageNodes)
+	if err != nil {
+		logrus.Error(errors.Wrap(err, "failed to find Philosophy page"))
+	}
 
-	fmt.Println("stats")
-
-	fmt.Printf("Hop count: %d", hopCount)
+	logrus.Info("stats")
+	logrus.Infof("Hop count: %d", hopCount)
 }
 
-func followLink(url string) *html.Node {
+func followLink(url string) (*html.Node, error) {
 	url = BASE_URL + url
-	fmt.Println(url)
+	logrus.Info(url)
+
 	_, ok := visitedPages[url]
 	if ok {
-		panic(fmt.Sprintf("page already visited: %s", url))
+		return nil, fmt.Errorf("page already visited: %s", url)
 	}
 
 	visitedPages[url] = struct{}{}
 
 	wikiPage, err := http.Get(url)
 	if err != nil {
-		panic(errors.Wrapf(err, "failed to get wiki page: %s", url))
+		return nil, errors.Wrapf(err, "failed to get wiki page: %s", url)
 	}
 	hopCount++
 
 	pageNodes, err := html.Parse(wikiPage.Body)
 	if err != nil {
-		panic(errors.Wrapf(err, "failed to parse wiki page: %s", url))
+		return nil, errors.Wrapf(err, "failed to parse wiki page: %s", url)
 	}
 
-	return pageNodes
+	return pageNodes, nil
 }
 
-func parseList(n *html.Node) string {
+func parseList(n *html.Node) (string, error) {
 	for s := n.FirstChild; n != nil; s = s.NextSibling {
 		if s.Type != html.ElementNode && s.Data != "li" {
-			panic("unexpected non li node")
+			return "", errors.New("unexpected non li node")
 		}
 
 		for s2 := s.FirstChild; s != nil; s2 = s2.NextSibling {
@@ -73,28 +78,32 @@ func parseList(n *html.Node) string {
 
 			for _, attr := range s2.Attr {
 				if attr.Key == "href" {
-					fmt.Printf("following first link: %s\n", attr.Val)
+					logrus.Infof("following first link: %s\n", attr.Val)
 
-					return attr.Val
+					return attr.Val, nil
 				}
 			}
 		}
 	}
 
-	return ""
+	return "", nil
 }
 
-func findFirstLink(n *html.Node) string {
+func findFirstLink(n *html.Node) (string, error) {
 	for s := n.FirstChild; s != nil; s = s.NextSibling {
 		if s.Type == html.ElementNode && s.Data == "ul" {
-			link := parseList(s)
+			link, err := parseList(s)
+			if err != nil {
+				return "", errors.Wrap(err, "failed to parse unsorted list")
+			}
+
 			if link == "" {
 				continue
 			}
 
-			fmt.Printf("following first link: %s\n", link)
+			logrus.Infof("following first link: %s\n", link)
 
-			return link
+			return link, nil
 		}
 
 		if s.Type != html.ElementNode || s.Data != "p" {
@@ -108,38 +117,50 @@ func findFirstLink(n *html.Node) string {
 
 			for _, attr := range s2.Attr {
 				if attr.Key == "href" {
-					fmt.Printf("following first link: %s\n", attr.Val)
+					logrus.Infof("following first link: %s\n", attr.Val)
 
-					return attr.Val
+					return attr.Val, nil
 				}
 			}
 		}
 	}
 
-	panic(fmt.Sprintf("failed to find link in node: %#v\n", n))
+	return "", fmt.Errorf("failed to find link in node: %#v\n", n)
 }
 
-func findAndFollowLink(n *html.Node) {
+func findAndFollowLink(n *html.Node) error {
 	body := findArticleBody(n)
 	if body == nil {
-		panic("failed to find article body")
+		return errors.New("failed to find article body")
 	}
 
-	link := findFirstLink(body)
+	link, err := findFirstLink(body)
+	if err != nil {
+		return errors.Wrap(err, "failed to find first link")
+	}
+
 	if strings.Contains(link, "/wiki/Philosophy") {
-		fmt.Printf("found philosophy link: %s\n", link)
-		return
+		logrus.Infof("found philosophy link: %s\n", link)
+		return nil
 	}
 
-	findAndFollowLink(followLink(link))
+	linkNode, err := followLink(link)
+	if err != nil {
+		return errors.Wrap(err, "failed to follow link")
+	}
+
+	err = findAndFollowLink(linkNode)
+	if err != nil {
+		return errors.Wrap(err, "failed to find and follow link")
+	}
+
+	return nil
 }
 
 func findArticleBody(n *html.Node) *html.Node {
 	for i := range n.Attr {
 		if n.Attr[i].Key == "class" && n.Attr[i].Val == "mw-parser-output" {
-			fmt.Println("found article body")
-			fmt.Printf("%#v\n", n)
-
+			logrus.Info("found article body")
 			return n
 		}
 	}

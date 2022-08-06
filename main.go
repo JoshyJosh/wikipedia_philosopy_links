@@ -18,17 +18,19 @@ var visitedPages map[string]struct{} = map[string]struct{}{}
 
 func main() {
 	// @todo set custom input url
-	// url := fmt.Sprintf("%s/wiki/Wikipedia:Getting_to_Philosophy", BASE_URL)
-	url := fmt.Sprintf("%s/wiki/Reality", BASE_URL)
+	url := fmt.Sprintf("%s/wiki/Wikipedia:Getting_to_Philosophy", BASE_URL)
+	// url := fmt.Sprintf("%s/wiki/Reality", BASE_URL)
 
 	wikiPage, err := http.Get(url)
 	if err != nil {
-		panic(errors.Wrapf(err, "failed to get wiki page: %s", url))
+		logrus.Error(errors.Wrapf(err, "failed to get wiki page: %s", url))
+		return
 	}
 
 	pageNodes, err := html.Parse(wikiPage.Body)
 	if err != nil {
-		panic(errors.Wrapf(err, "failed to parse wiki page: %s", url))
+		logrus.Error(errors.Wrapf(err, "failed to parse wiki page: %s", url))
+		return
 	}
 
 	err = findAndFollowLink(pageNodes)
@@ -44,8 +46,7 @@ func followLink(url string) (*html.Node, error) {
 	url = BASE_URL + url
 	logrus.Info(url)
 
-	_, ok := visitedPages[url]
-	if ok {
+	if _, ok := visitedPages[url]; ok {
 		return nil, fmt.Errorf("page already visited: %s", url)
 	}
 

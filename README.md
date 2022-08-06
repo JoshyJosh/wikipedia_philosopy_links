@@ -13,3 +13,7 @@ https://en.wikipedia.org/wiki/Wikipedia:Getting_to_Philosophy
 The links loop usually on the "Branches of science" page. For reference I double checked with [xefers wikipedia](https://www.xefer.com/wikipedia) project. Seemingly the only difference is doing the API calls instead of parsing the html pages, however using the random button i found that false positives can still happend (try typing in `Crichton, Alabama,Gu`). That being said I love the project overall and its a nice visual representation.
 
 As far as I can tell the `Getting to Philosophy` phenomenon is false, though it might have still worked in the past.
+
+## Custom arguments
+The program accepts a single argument which should be a full url of a wikipedia page.
+ex.: `go run main https://en.wikipedia.org/wiki/Reality`

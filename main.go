@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 
@@ -17,9 +18,19 @@ var hopCount int
 var visitedPages map[string]struct{} = map[string]struct{}{}
 
 func main() {
-	// @todo set custom input url
+	// set default url
 	url := fmt.Sprintf("%s/wiki/Wikipedia:Getting_to_Philosophy", BASE_URL)
-	// url := fmt.Sprintf("%s/wiki/Reality", BASE_URL)
+
+	// parse custom input
+	if len(os.Args) > 0 {
+		logrus.Infof("Custom url detected: %s", os.Args[1])
+		url = os.Args[1]
+
+		if !strings.Contains(url, ".wikipedia.org/wiki/") {
+			logrus.Errorf("invalid custom url detected, the url should contain a wikipedia page. url: %s", url)
+			return
+		}
+	}
 
 	wikiPage, err := http.Get(url)
 	if err != nil {
